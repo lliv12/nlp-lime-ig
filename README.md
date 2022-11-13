@@ -7,7 +7,7 @@ Resources:
 - (Tokenization; Sentence Piece):  https://github.com/google/sentencepiece
 
 ```
-print("test")
+conda install -c conda-forge sentencepiece
 ```
 
 - (Pretrained Models (Hugging Face)):  https://huggingface.co/docs/transformers/index
