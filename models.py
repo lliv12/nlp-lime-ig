@@ -1,5 +1,15 @@
 from torch import nn
 import torch
+import os
+
+MODEL_DIR = "/saved_models/"
+
+
+def save_model(model, name):
+    torch.save(model, os.getcwd() + MODEL_DIR + name + '.pt')
+
+def load_model(model_name):
+    return torch.load(os.getcwd() + MODEL_DIR + model_name + '.pt')
 
 class BasicDANModel(nn.Module):
 

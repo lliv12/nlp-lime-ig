@@ -43,19 +43,23 @@ def load_essays(train=True, valid=True, test=True, score_type='categorical'):
 
     return dfs
 
-class ReviewsDataset(torch.utils.data.Dataset):
 
-    '''
-      -  tokenizer:  the name of the model file for the tokenizer to load (will train a new one if not found)
-      -  force_retrain:  train a new tokenizer and save it, regardless of whether it exists.
-      -  BPE_params:  optional parameters for training byte-pair encoder. Check out tokenizer_utils.train_BPE for list of options
-    '''
-    def __init__(self, tokenizer='reviews_tokenizer', force_retrain=False, BPE_params='default'):
-        self.data = load_reviews()
-        if force_retrain or tokenizer not in [f.split('.')[0] for f in os.listdir(os.getcwd() + tokenizer_utils.MODEL_DIR)]:
-            print("Training BPE tokenizer ...")
-            if BPE_params == 'default':  BPE_params = {'lowercase': True, 'vocab_size': 1000}  # default BPE settings
-            tokenizer_utils.train_BPE(dataset_utils.REVIEWS_DIR + 'reviews_text.txt', tokenizer, **BPE_params)
+class BaseDataset(torch.utils.data.Dataset):
+
+    class Iterator:
+        def __init__(self, base):
+            self.idx = 0
+            self.base = base
+        def __iter__(self):
+            return self
+        def __next__(self):
+            self.idx += 1
+            if self.idx <= len(self.base):
+                return self.base[self.idx-1]
+            raise StopIteration()
+
+    def __init__(self, data, tokenizer):
+        self.data = data
         self.tokenizer = tokenizer_utils.load_model(tokenizer)
 
     def __len__(self):
@@ -64,37 +68,48 @@ class ReviewsDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         return torch.Tensor(self.tokenizer.encode(self.data['reviewText'][idx]).ids).long(), self.data['overall'][idx]
 
+    def __iter__(self):
+        return BaseDataset.Iterator(self)
+
     def vocab_size(self):
         return self.tokenizer.get_vocab_size()
 
-class EssaysDataset(torch.utils.data.Dataset):
+class ReviewsDataset(BaseDataset):
 
     '''
       -  tokenizer:  the name of the model file for the tokenizer to load (will train a new one if not found)
       -  force_retrain:  train a new tokenizer and save it, regardless of whether it exists.
       -  BPE_params:  optional parameters for training byte-pair encoder. Check out tokenizer_utils.train_BPE for list of options
     '''
-    def __init__(self, tokenizer='essays_tokenizer', force_retrain=False, BPE_params='default'):
-        self.data = load_essays(valid=False, test=False)[0]
+    def __init__(self, tokenizer='reviews_tokenizer', force_retrain=False, BPE_params='default'):
+        super().__init__(load_reviews(), tokenizer)
+        if force_retrain or tokenizer not in [f.split('.')[0] for f in os.listdir(os.getcwd() + tokenizer_utils.MODEL_DIR)]:
+            print("Training BPE tokenizer ...")
+            if BPE_params == 'default':  BPE_params = {'lowercase': True, 'vocab_size': 1000}  # default BPE settings
+            tokenizer_utils.train_BPE(dataset_utils.REVIEWS_DIR + 'reviews_text.txt', tokenizer, **BPE_params)
+
+    def __getitem__(self, idx, mode='train'):
+        if mode == 'train':
+            return torch.Tensor(self.tokenizer.encode(self.data['reviewText'][idx]).ids).long(), torch.from_numpy(np.array(self.data['overall'][idx], dtype='float32'))
+        else:
+            return self.tokenizer.encode(self.data['reviewText'][idx]), self.data['overall'][idx]
+
+class EssaysDataset(BaseDataset):
+
+    '''
+      -  tokenizer:  the name of the model file for the tokenizer to load (will train a new one if not found)
+      -  force_retrain:  train a new tokenizer and save it, regardless of whether it exists.
+      -  BPE_params:  optional parameters for training byte-pair encoder. Check out tokenizer_utils.train_BPE for list of options
+    '''
+    def __init__(self, tokenizer='essays_tokenizer', force_retrain=False, score_type='categorical', BPE_params='default'):
+        super().__init__(load_essays(valid=False, test=False, score_type=score_type)[0], tokenizer)
         if force_retrain or tokenizer not in [f.split('.')[0] for f in os.listdir(os.getcwd() + tokenizer_utils.MODEL_DIR)]:
             print("Training BPE tokenizer ...")
             if BPE_params=='default':  BPE_params = {'special_tokens': dataset_utils.NER_TOKENS, 'vocab_size': 1000}  # default BPE settings
             tokenizer_utils.train_BPE(dataset_utils.ESSAYS_DIR + 'essays_text.txt', tokenizer, **BPE_params)
-        self.tokenizer = tokenizer_utils.load_model(tokenizer)
 
-    def __len__(self):
-        return len(self.data)
-
-    def __getitem__(self, idx):
-        return self.tokenizer.encode(self.data['essay'][idx]).ids, self.data['domain1_score'][idx]
-
-    def vocab_size(self):
-        return self.tokenizer.get_vocab_size()
-
-
-# test = EssaysDataset(force_retrain=True)
-#ReviewsDataset(force_retrain=True)
-d = load_essays(valid=False, test=False, score_type='binary')[0]
-print(d[0:20]['domain1_score'])
-
-# print(test[1321][0])
+    def __getitem__(self, idx, mode='train'):
+        if mode == 'train':
+            return torch.Tensor(self.tokenizer.encode(self.data['essay'][idx]).ids).long(), torch.from_numpy(np.array(self.data['domain1_score'][idx], dtype='float32'))
+        else:
+            return self.tokenizer.encode(self.data['essay'][idx]), self.data['domain1_score'][idx]

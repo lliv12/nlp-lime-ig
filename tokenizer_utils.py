@@ -7,9 +7,9 @@ from tokenizers.pre_tokenizers import Whitespace
 from tokenizers.normalizers import Lowercase
 from tokenizers.models import BPE
 from tokenizers.trainers import BpeTrainer
+from models import MODEL_DIR
 import os
 
-MODEL_DIR = "/saved_models/"
 
 '''
   -  text_file:  the name of the .txt file containing the text you want to train BPE on
