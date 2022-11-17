@@ -59,12 +59,6 @@ def load_essays_dfs(train=True, valid=True, test=True):
         df['essay'] = df['essay'].transform(func=lambda s: re.sub('|'.join(NER_TOKENS), lambda x: x.group() + ' ', s) if type(s) == str else s)
         return df
     dfs = [preprocess(pd.read_json(ESSAYS_DIR + f, lines=False)) for f in files]
-    # cleanup
-    # for df in dfs:
-    #     df.replace('', np.nan, inplace=True)
-    #     for col in df.columns:
-    #         if col != 'essay':
-    #             df[col] = pd.to_numeric(df[col], errors='coerce').astype('Int64')
     return dfs
 
 

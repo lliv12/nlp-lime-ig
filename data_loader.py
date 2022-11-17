@@ -13,23 +13,30 @@ import tokenizer_utils
 '''
   -  files:  list of review .json files to load
   -  nrows_per_type:  how many reviews to load per .json file (and concatenate)
+  -  score_type:  'categorical' (integer score range) or 'binary' (scores: '0' or '1')
+  -  binary_threshold:  (if using binary score)  scores less than or equal to this value are classified as negative (0), and positive (1) otherwise
 '''
-def load_reviews(files=None, nrows_per_type=None):
-    return dataset_utils.load_reviews_df(files, nrows_per_type)
+def load_reviews(files=None, nrows_per_type=None, score_type='categorical', binary_threshold=4):
+    df = dataset_utils.load_reviews_df(files, nrows_per_type)
+
+    if score_type == 'binary':
+        df['overall'] = (df['overall'] > binary_threshold).astype(int)
+    return df
 
 '''
   -  train:  whether to load the training set (True/False)
   -  valid:  whether to load the validation set (True/False)
-  -  score_type:  'categorical' (integer score range) or 'binary' (scores: 'True' or 'False') or 'standardized' (in the range [-1.0, 1.0])
+  -  score_type:  'categorical' (integer score range) or 'binary' (scores: '0' or '1') or 'standardized' (in the range [-1.0, 1.0])
+  -  binary_threshold:  (if using binary score)  the threshold above which scores are classified as positive (1), and negative (0) otherwise
 '''
-def load_essays(train=True, valid=True, test=True, score_type='categorical'):
+def load_essays(train=True, valid=True, test=True, score_type='categorical', binary_threshold=0.0):
     dfs = dataset_utils.load_essays_dfs(train, valid, test)
     
     def standardize_df(df, binarize=False):
         def std(df):
             new_df = df.copy()
             new_df['domain1_score'] = 2*((df['domain1_score'] - df['domain1_score'].min()) / (df['domain1_score'].max() - df['domain1_score'].min())) - 1.0
-            if binarize:  new_df['domain1_score'] = new_df['domain1_score'] > 0.0
+            if binarize:  new_df['domain1_score'] = (new_df['domain1_score'] > binary_threshold).astype(int)
             return new_df
         sub_dfs = []
         for g in df.groupby('essay_set'):
@@ -66,7 +73,7 @@ class BaseDataset(torch.utils.data.Dataset):
         return len(self.data)
 
     def __getitem__(self, idx):
-        return torch.Tensor(self.tokenizer.encode(self.data['reviewText'][idx]).ids).long(), self.data['overall'][idx]
+        raise NotImplementedError()
 
     def __iter__(self):
         return BaseDataset.Iterator(self)
@@ -81,8 +88,8 @@ class ReviewsDataset(BaseDataset):
       -  force_retrain:  train a new tokenizer and save it, regardless of whether it exists.
       -  BPE_params:  optional parameters for training byte-pair encoder. Check out tokenizer_utils.train_BPE for list of options
     '''
-    def __init__(self, tokenizer='reviews_tokenizer', force_retrain=False, BPE_params='default'):
-        super().__init__(load_reviews(), tokenizer)
+    def __init__(self, tokenizer='reviews_tokenizer', force_retrain=False, score_type='categorical', BPE_params='default'):
+        super().__init__(load_reviews(score_type=score_type), tokenizer)
         if force_retrain or tokenizer not in [f.split('.')[0] for f in os.listdir(os.getcwd() + tokenizer_utils.MODEL_DIR)]:
             print("Training BPE tokenizer ...")
             if BPE_params == 'default':  BPE_params = {'lowercase': True, 'vocab_size': 1000}  # default BPE settings
