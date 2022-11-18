@@ -3,17 +3,17 @@ from data_loader import ReviewsDataset, EssaysDataset
 from captum.attr import IntegratedGradients
 from torch.nn import MSELoss, CrossEntropyLoss, BCELoss
 from torch.optim import Adam
+import numpy as np
 import argparse
 
 DEFAULT_MODEL_NAME = "model"
 
 
-def train(model, dataset, model_name, verbose=True, loss_type='mse', epochs=10, lr=0.001):
-    # NOTE: the loss must be compatible with the network output layer (and incoming labels of course)
-    if(loss_type == 'mse'):  loss_fun = MSELoss()
-    elif(loss_type == 'cat'):  loss_fun = CrossEntropyLoss()
-    elif(loss_type == 'bin'):  loss_fun = BCELoss()
-    else:  raise Exception("Unknown loss_type:  '{l}'".format(l=loss_type))
+def train(model, dataset, model_name, verbose=True, score_type='categorical', epochs=10, lr=0.001):
+    # Set loss function to be compatible with the score type
+    if(score_type == 'categorical'):  loss_fun = CrossEntropyLoss()
+    elif(score_type == 'binary'):  loss_fun = BCELoss()
+    elif(score_type == 'standardized'):  loss_fun = MSELoss()
     optim = Adam(model.parameters(), lr=lr)
     model.train()
     for e in range(epochs):
@@ -21,6 +21,7 @@ def train(model, dataset, model_name, verbose=True, loss_type='mse', epochs=10, 
         for ex in dataset:
             # make prediction
             pred = model(ex[0])
+            if score_type == 'categorical':  pred = pred.unsqueeze(dim=0)
             loss = loss_fun(pred, ex[1])
 
             # backpropogate
@@ -28,16 +29,26 @@ def train(model, dataset, model_name, verbose=True, loss_type='mse', epochs=10, 
             loss.backward()
             optim.step()
 
-            # logging
             total_loss += loss.item()
+
         if verbose:
             print("Epoch {ep} loss:   {l}".format(ep=e, l=total_loss / len(dataset)))
     save_model(model, model_name)
 
 
-def inference(model):
+def inference(model, dataset, ex_id=None):
+    # NOTE: Does not appear to work with scalar target (predicting standardized scores)
+    # https://captum.ai/api/integrated_gradients.html
+    # https://github.com/pytorch/captum/issues/405
     model.eval()
-    raise NotImplementedError()
+    if not ex_id:  ex_id = np.random.randint(len(dataset))
+    ig = IntegratedGradients(model.forward_emb)
+    attributions = ig.attribute(inputs=model.get_embeddings(dataset[ex_id][0]), baselines=None, target=dataset[ex_id][1].long().item())
+    scores = np.mean(attributions.detach().numpy(), axis=2).squeeze()
+    print("SCORES: ", scores)
+    print("SHAPE: ", scores.shape)
+
+    # TODO: Add visualization of token scores
 
 
 if __name__ == "__main__":
@@ -49,26 +60,34 @@ if __name__ == "__main__":
     parser.add_argument('-n', '--model_name', help="What name to give to the model  (will save {model_name}.pt after training is finished).")
     parser.add_argument('-e', '--epochs', type=int, default=10, help="How many epochs to run the model for.")
     parser.add_argument('-lr', '--learning_rate', type=float, default=0.001, help="The learning rate for training.")
-    parser.add_argument('-l', '--loss_type', default='mse', help="The loss to use for training the model. Be sure this is compatible with the model you want to train.")
+    parser.add_argument('-s', '--score_type', choices=['categorical', 'binary', 'standardized'], help="The type of the scores. Be sure this is compatible with the model and dataset you want to use.")
+    parser.add_argument('-ex_id', '--ex_id', help="The example id you want to make inference on (will be chosen randomly if not specified)")
     parser.add_argument('-v', '--verbose', default=True, help="Log training progress to the console.")
 
     args = parser.parse_args()
 
-    if args.dataset == 'reviews':  dataset = ReviewsDataset()
-    elif args.dataset == 'essays':  dataset = EssaysDataset(score_type='standardized')
+    print("Loading and preparing dataset ...")
+    if args.dataset == 'reviews':
+        score_type = args.score_type if args.score_type else 'categorical'
+        dataset = ReviewsDataset(score_type=score_type)
+    elif args.dataset == 'essays':
+        score_type = args.score_type if args.score_type else 'standardized'
+        dataset = EssaysDataset(score_type=score_type)
     else:  raise Exception("Unknown value for dataset: '{d}'".format(d=args.dataset))
 
     if args.model_file:
         model = load_model(args.model_file)
     elif args.model_type == 'dan':
-        model = BasicDANModel(dataset.vocab_size())
+        out_size = 1 if args.dataset == 'essays' else 5
+        model = BasicDANModel(dataset.vocab_size(), out_size=out_size, bin=args.score_type == 'binary')
     else:
         raise Exception("Unknown model type: '{m}'".format(m=args.model_file))
 
+    print("Executing ...")
     if args.mode == 'train':
         model_name = args.model_name if args.model_name else (args.model_file if args.model_file else DEFAULT_MODEL_NAME)
-        train(model, dataset, model_name, verbose=args.verbose, loss_type=args.loss_type, epochs=args.epochs, lr=args.learning_rate)
+        train(model, dataset, model_name, verbose=args.verbose, score_type=score_type, epochs=args.epochs, lr=args.learning_rate)
     elif args.mode == 'ig':
-        inference(model)
+        inference(model, dataset, args.ex_id)
     else:
         raise Exception("Unknown mode: '{m}'".format(m=args.mode))

@@ -20,7 +20,7 @@ def load_reviews(files=None, nrows_per_type=None, score_type='categorical', bina
     df = dataset_utils.load_reviews_df(files, nrows_per_type)
 
     if score_type == 'binary':
-        df['overall'] = (df['overall'] > binary_threshold).astype(int)
+        df['overall'] = (df['overall'] > binary_threshold).astype(np.float32)
     return df
 
 '''
@@ -36,7 +36,7 @@ def load_essays(train=True, valid=True, test=True, score_type='categorical', bin
         def std(df):
             new_df = df.copy()
             new_df['domain1_score'] = 2*((df['domain1_score'] - df['domain1_score'].min()) / (df['domain1_score'].max() - df['domain1_score'].min())) - 1.0
-            if binarize:  new_df['domain1_score'] = (new_df['domain1_score'] > binary_threshold).astype(int)
+            if binarize:  new_df['domain1_score'] = (new_df['domain1_score'] > binary_threshold).astype(np.float32)
             return new_df
         sub_dfs = []
         for g in df.groupby('essay_set'):
@@ -72,9 +72,6 @@ class BaseDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.data)
 
-    def __getitem__(self, idx):
-        raise NotImplementedError()
-
     def __iter__(self):
         return BaseDataset.Iterator(self)
 
@@ -89,6 +86,7 @@ class ReviewsDataset(BaseDataset):
       -  BPE_params:  optional parameters for training byte-pair encoder. Check out tokenizer_utils.train_BPE for list of options
     '''
     def __init__(self, tokenizer='reviews_tokenizer', force_retrain=False, score_type='categorical', BPE_params='default'):
+        self.score_type = score_type
         super().__init__(load_reviews(score_type=score_type), tokenizer)
         if force_retrain or tokenizer not in [f.split('.')[0] for f in os.listdir(os.getcwd() + tokenizer_utils.MODEL_DIR)]:
             print("Training BPE tokenizer ...")
@@ -97,7 +95,13 @@ class ReviewsDataset(BaseDataset):
 
     def __getitem__(self, idx, mode='train'):
         if mode == 'train':
-            return torch.Tensor(self.tokenizer.encode(self.data['reviewText'][idx]).ids).long(), torch.from_numpy(np.array(self.data['overall'][idx], dtype='float32'))
+            if self.score_type == 'categorical':
+                label = torch.from_numpy(np.array(self.data['overall'][idx]-1)).unsqueeze(dim=0)
+            elif self.score_type == 'binary':
+                label = torch.from_numpy(np.array(self.data['overall'][idx])).unsqueeze(dim=0)
+            else:
+                label = torch.from_numpy(np.array(self.data['overall'][idx], dtype='float32'))
+            return torch.Tensor(self.tokenizer.encode(self.data['reviewText'][idx]).ids).long(), label
         else:
             return self.tokenizer.encode(self.data['reviewText'][idx]), self.data['overall'][idx]
 
@@ -109,6 +113,7 @@ class EssaysDataset(BaseDataset):
       -  BPE_params:  optional parameters for training byte-pair encoder. Check out tokenizer_utils.train_BPE for list of options
     '''
     def __init__(self, tokenizer='essays_tokenizer', force_retrain=False, score_type='categorical', BPE_params='default'):
+        self.score_type = score_type
         super().__init__(load_essays(valid=False, test=False, score_type=score_type)[0], tokenizer)
         if force_retrain or tokenizer not in [f.split('.')[0] for f in os.listdir(os.getcwd() + tokenizer_utils.MODEL_DIR)]:
             print("Training BPE tokenizer ...")
@@ -117,6 +122,12 @@ class EssaysDataset(BaseDataset):
 
     def __getitem__(self, idx, mode='train'):
         if mode == 'train':
-            return torch.Tensor(self.tokenizer.encode(self.data['essay'][idx]).ids).long(), torch.from_numpy(np.array(self.data['domain1_score'][idx], dtype='float32'))
+            if self.score_type == 'categorical':
+                label = torch.from_numpy(np.array(self.data['domain1_score'][idx]-1)).unsqueeze(dim=0)
+            elif self.score_type == 'binary':
+                label = torch.from_numpy(np.array(self.data['domain1_score'][idx])).unsqueeze(dim=0)
+            else:
+                label = torch.from_numpy(np.array(self.data['domain1_score'][idx], dtype='float32'))
+            return torch.Tensor(self.tokenizer.encode(self.data['essay'][idx]).ids).long(), label
         else:
             return self.tokenizer.encode(self.data['essay'][idx]), self.data['domain1_score'][idx]

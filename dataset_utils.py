@@ -41,7 +41,7 @@ def load_reviews_df(files=None, nrows_per_type=None):
         df = pd.read_json(REVIEWS_DIR + f, lines=True, nrows=nrows_per_type)
         df['type'] = f.split('-')[0]
         dfs.append(df)
-    return pd.concat(dfs).reset_index()
+    return pd.concat(dfs).dropna(subset=['reviewText', 'overall']).reset_index()
 
 def load_essays_dfs(train=True, valid=True, test=True):
     files = []
@@ -54,8 +54,7 @@ def load_essays_dfs(train=True, valid=True, test=True):
         for col in df.columns:
             if col != 'essay':
                 df[col] = pd.to_numeric(df[col], errors='coerce').astype('Int64')
-        df.dropna(subset=['essay', 'domain1_score'], inplace=True)
-        df.reset_index(inplace=True)
+        df = df.dropna(subset=['essay', 'domain1_score']).reset_index()
         df['essay'] = df['essay'].transform(func=lambda s: re.sub('|'.join(NER_TOKENS), lambda x: x.group() + ' ', s) if type(s) == str else s)
         return df
     dfs = [preprocess(pd.read_json(ESSAYS_DIR + f, lines=False)) for f in files]
