@@ -14,6 +14,7 @@ def train(model, dataset, model_name, verbose=True, score_type='categorical', ep
     if(score_type == 'categorical'):  loss_fun = CrossEntropyLoss()
     elif(score_type == 'binary'):  loss_fun = BCELoss()
     elif(score_type == 'standardized'):  loss_fun = MSELoss()
+    else: raise NotImplementedError("No loss fn chosen for this score_type")
     optim = Adam(model.parameters(), lr=lr)
     model.train()
     for e in range(epochs):
@@ -56,8 +57,8 @@ if __name__ == "__main__":
     parser.add_argument('-m', '--mode', choices=['train', 'ig'], default='train', help="What mode to run on.")
     parser.add_argument('-d', '--dataset', choices=['reviews', 'essays'], default='reviews', help="Which dataset to use for training / evaluation.")
     parser.add_argument('-t', '--model_type', choices=['dan'], default='dan', help="What type of model to use for training.")
-    parser.add_argument('-f', '--model_file', help="The name of the model file to load for training / evaluation  (loads {model_file}.pt).")
-    parser.add_argument('-n', '--model_name', help="What name to give to the model  (will save {model_name}.pt after training is finished).")
+    parser.add_argument('-f', '--model_file', help="The name of the model file to load for training / evaluation  (loads %s<model_file>.pt)." % MODEL_DIR)
+    parser.add_argument('-n', '--model_name', help="What name to give to the model  (will save <model_name>.pt after training is finished).")
     parser.add_argument('-e', '--epochs', type=int, default=10, help="How many epochs to run the model for.")
     parser.add_argument('-lr', '--learning_rate', type=float, default=0.001, help="The learning rate for training.")
     parser.add_argument('-s', '--score_type', choices=['categorical', 'binary', 'standardized'], help="The type of the scores. Be sure this is compatible with the model and dataset you want to use.")
