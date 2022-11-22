@@ -50,7 +50,7 @@ def load_essays_dfs(train=True, valid=True, test=True):
     if test:  files.append('test_set.json')
     # Pre-process NER tokens (separate numeral from the capitalized part)
     def preprocess(df):
-        df.replace('', np.nan, inplace=True)
+        df.replace(['', '<NA>'], np.nan, inplace=True)
         for col in df.columns:
             if col != 'essay':
                 df[col] = pd.to_numeric(df[col], errors='coerce').astype('Int64')
