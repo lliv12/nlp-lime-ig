@@ -30,6 +30,7 @@ REVIEWS_FILES = [
     "video_games-5core.json"
 ]
 
+PADDING_TOKEN = '<PAD>'
 NER_TOKENS = ['@CAPS', '@CITY', '@DATE', '@DR', '@EMAIL', '@LOCATION', '@MONEY', '@MONTH', '@NUM', '@ORGANIZATION', '@PERCENT', '@PERSON', '@STATE', '@TIME']
 
 

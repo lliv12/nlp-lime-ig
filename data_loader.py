@@ -70,86 +70,93 @@ def load_essays(train=True, valid=True, test=True, score_type='categorical', bin
 
 
 class BaseDataset(torch.utils.data.Dataset):
-
-    class Iterator:
-        def __init__(self, base):
-            self.idx = 0
-            self.base = base
-        def __iter__(self):
-            return self
-        def __next__(self):
-            self.idx += 1
-            if self.idx <= len(self.base):
-                return self.base[self.idx-1]
-            raise StopIteration()
-
-    def __init__(self, data, tokenizer):
+    '''
+      -  tokenizer:  the name of the model file for the tokenizer to load (will train a new one if not found)
+      -  force_retrain:  train a new tokenizer and save it, regardless of whether it exists.
+      -  score_type:  the type of score to use
+      -  seq_len:  the set length for sequences (in #tokens). Will cut down larger sequences, and pad shorter sequences. If not set, will leave sequences alone.
+                   If 'max', will pad sequences to the max sequence length.
+      -  load_mode:  the mode for loading the data ('cache': tokenize examples internally; best used for training. 'lazy': )
+      -  get_x_func:  function for retrieving text input at specific index (from pandas DataFrame)
+      -  get_y_func:  function for retrieving label at specific index (from pandas DataFrame)
+    '''
+    def __init__(self, data, tokenizer, score_type, seq_len, load_mode, get_x_func, get_y_func):
         self.data = data
+        self.score_type = score_type
         self.tokenizer = tokenizer_utils.load_model(tokenizer)
+        self.load_mode = load_mode
+        self.__get_x = get_x_func
+        self.__get_y = get_y_func
+
+        # use the max sequence length (in chars) as a heuristic. Get the number of tokens in its encoding.
+        self.max_seq_len = len(self.tokenizer.encode( self.__get_x( self.__get_x(range(len(self.data))).str.len().argmax() ) ))
+        if seq_len:
+            length = (self.max_seq_len if seq_len=='max' else seq_len)
+            self.tokenizer.enable_padding(pad_token=dataset_utils.PADDING_TOKEN, length=length)
+            self.tokenizer.enable_truncation(length)
+
+        if self.load_mode == 'cache':
+            self.prepared_data = [self.__prepare_ex(i) for i in range(len(self.data))]
+
+    '''
+      -  idx:  the index of the item in this dataset
+      -  format:  the format of the item  ('train': in Tensor format; 'encoding': the tokenizer encoding; 'raw': the raw text)
+    '''
+    def __getitem__(self, idx, format='train'):
+        if format == 'train':
+            if self.load_mode == 'cache':
+                return self.prepared_data[idx]
+            elif self.load_mode == 'lazy':
+                return self.__prepare_ex(idx)
+        elif format == 'encoding':
+            return self.tokenizer.encode(self.__get_x(idx)), self.__get_y(idx)
+        elif format == 'raw':
+            return self.__get_x(idx), self.__get_y(idx)
+        else:
+            raise NotImplementedError("Unsupported format:  '{f}'".format(f=format))
 
     def __len__(self):
         return len(self.data)
 
-    def __iter__(self):
-        return BaseDataset.Iterator(self)
-
     def vocab_size(self):
         return self.tokenizer.get_vocab_size()
+
+    def __prepare_ex(self, idx):
+        if self.score_type in ['categorical', 'binary']:
+            sub = 1 if self.score_type == 'categorical' else 0
+            label = torch.from_numpy(np.array(self.__get_y(idx)-sub))
+        else:
+            label = torch.from_numpy(np.array(self.__get_y(idx), dtype='float32'))
+        return torch.Tensor(self.tokenizer.encode(self.__get_x(idx)).ids).long(), label
+
 
 class ReviewsDataset(BaseDataset):
 
     '''
-      -  tokenizer:  the name of the model file for the tokenizer to load (will train a new one if not found)
-      -  force_retrain:  train a new tokenizer and save it, regardless of whether it exists.
       -  BPE_params:  optional parameters for training byte-pair encoder. Check out tokenizer_utils.train_BPE for list of options
     '''
-    def __init__(self, tokenizer='reviews_tokenizer', force_retrain=False, score_type='categorical', BPE_params='default'):
-        self.score_type = score_type
-        super().__init__(load_reviews(score_type=score_type), tokenizer)
+    def __init__(self, tokenizer='reviews_tokenizer', force_retrain=False, score_type='categorical', seq_len=None, load_mode='cache', BPE_params='default'):
+        # train a tokenizer if we must or if there's no tokenizer of the given name.
         if force_retrain or tokenizer not in [f.split('.')[0] for f in os.listdir(os.getcwd() + tokenizer_utils.MODEL_DIR)]:
             print("Training BPE tokenizer ...")
             if BPE_params == 'default':  BPE_params = {'lowercase': True, 'vocab_size': 1000}  # default BPE settings
             tokenizer_utils.train_BPE('reviews', tokenizer, **BPE_params)
+        def __get_x(idx):  return self.data['reviewText'][idx]
+        def __get_y(idx):  return self.data['overall'][idx]
+        super().__init__(load_reviews(score_type=score_type), tokenizer, score_type, seq_len, load_mode, __get_x, __get_y)
 
-    def __getitem__(self, idx, raw=False):
-        if raw:
-            return self.tokenizer.encode(self.data['reviewText'][idx]), self.data['overall'][idx]
-        else:
-            if self.score_type in ['categorical', 'binary']:
-                sub = 1 if self.score_type == 'categorical' else 0
-                label = torch.from_numpy(np.array(self.data['overall'][idx]-sub)).unsqueeze(dim=0)
-            else:
-                label = torch.from_numpy(np.array(self.data['overall'][idx], dtype='float32'))
-            return torch.Tensor(self.tokenizer.encode(self.data['reviewText'][idx]).ids).long(), label
-
-    def get_text(self, idx):
-        return self.data['reviewText'][idx]
 
 class EssaysDataset(BaseDataset):
 
     '''
-      -  tokenizer:  the name of the model file for the tokenizer to load (will train a new one if not found)
-      -  force_retrain:  train a new tokenizer and save it, regardless of whether it exists.
       -  BPE_params:  optional parameters for training byte-pair encoder. Check out tokenizer_utils.train_BPE for list of options
     '''
-    def __init__(self, tokenizer='essays_tokenizer', force_retrain=False, score_type='categorical', BPE_params='default'):
-        self.score_type = score_type
-        super().__init__(load_essays(valid=False, test=False, score_type=score_type)[0], tokenizer)
+    def __init__(self, tokenizer='essays_tokenizer', force_retrain=False, score_type='categorical', seq_len=None, load_mode='cache', BPE_params='default'):
+        # train a tokenizer if we must or if there's no tokenizer of the given name.
         if force_retrain or tokenizer not in [f.split('.')[0] for f in os.listdir(os.getcwd() + tokenizer_utils.MODEL_DIR)]:
             print("Training BPE tokenizer ...")
-            if BPE_params=='default':  BPE_params = {'special_tokens': dataset_utils.NER_TOKENS, 'vocab_size': 1000}  # default BPE settings
+            if BPE_params=='default':  BPE_params = {'vocab_size': 1000}  # default BPE settings
             tokenizer_utils.train_BPE('essays', tokenizer, **BPE_params)
-
-    def __getitem__(self, idx, raw=False):
-        if raw:
-            return self.tokenizer.encode(self.data['essay'][idx]), self.data['domain1_score'][idx]
-        else:
-            if self.score_type in ['categorical', 'binary']:
-                sub = 1 if self.score_type == 'categorical' else 0
-                label = torch.from_numpy(np.array(self.data['domain1_score'][idx]-sub)).unsqueeze(dim=0)
-            else:
-                label = torch.from_numpy(np.array(self.data['domain1_score'][idx], dtype='float32'))
-            return torch.Tensor(self.tokenizer.encode(self.data['essay'][idx]).ids).long(), label
-
-    def get_text(self, idx):
-        return self.data['essay'][idx]
+        def __get_x(idx):  return self.data['essay'][idx]
+        def __get_y(idx):  return self.data['domain1_score'][idx]
+        super().__init__(load_essays(valid=False, test=False, score_type=score_type)[0], tokenizer, score_type, seq_len, load_mode, __get_x, __get_y)

@@ -8,7 +8,7 @@ from tokenizers.normalizers import Lowercase
 from tokenizers.models import BPE
 from tokenizers.trainers import BpeTrainer
 from models import MODEL_DIR
-from dataset_utils import REVIEWS_DIR, ESSAYS_DIR
+from dataset_utils import REVIEWS_DIR, ESSAYS_DIR, PADDING_TOKEN, NER_TOKENS
 import argparse
 import os
 
@@ -51,5 +51,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    special_tokens = [PADDING_TOKEN]
+    if args.dataset == 'essays':  special_tokens += NER_TOKENS
     if args.tokenizer_type == 'bpe':
-        train_BPE(args.dataset, args.tokenizer_name, args.whitespace, args.lowercase, vocab_size=args.vocab_size)
+        train_BPE(args.dataset, args.tokenizer_name, args.whitespace, args.lowercase, special_tokens, args.vocab_size)

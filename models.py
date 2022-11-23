@@ -25,12 +25,13 @@ class BasicDANModel(nn.Module):
         self.out = nn.Linear(emb_dim, out_size)
         nn.init.xavier_uniform_( self.out.weight )
 
-    # [For IG interpolation]  NOTE: input must be (num_tokens, emb_dim)
+    # [For IG interpolation]  NOTE: input must be (batch_size, num_tokens)
     def get_embeddings(self, input):
-        return self.emb(input).unsqueeze(dim=0)
+        return self.emb(input)
 
+    # input:  (batch_size, num_tokens)
     def forward(self, input):
-        return self.out( self.tanh(torch.mean(self.emb(input), dim=0)) )
+        return self.out( self.tanh(torch.mean(self.emb(input), dim=1)) )
 
     # NOTE: emb must be (num_examples, num_tokens, emb_dim)
     def forward_emb(self, emb):
@@ -57,21 +58,18 @@ class TransformerModel(nn.Module):
         self.decoder = nn.Linear(emb_dim, out_size)
         self.init_weights()
 
-    # input:  a list of token indices
+    # [For IG interpolation]  NOTE: input must be (num_tokens, emb_dim)
     def get_embeddings(self, input):
-        src_emb = self.embedding(input)
-        if len(src_emb.shape) == 2:  src_emb = src_emb.unsqueeze(dim=0)  # add batch dimension if not already present
-        return src_emb
+        return self.embedding(input)
 
-    # input:  a list of token indices
+    # input:  (batch_size, num_tokens)
     def forward(self, input):
         src_emb = self.embedding(input) * np.sqrt(self.vocab_size)
-        if len(src_emb.shape) == 2:  src_emb = src_emb.unsqueeze(dim=0)  # add batch dimension if not already present
-        return self.decoder( self.encoder(src_emb) ).squeeze(dim=0)[-1]
+        padding_mask = (~input.bool()).long()
+        return self.decoder( self.encoder(src_emb, src_key_padding_mask=padding_mask) )[:,-1]
 
     def forward_emb(self, emb):
         emb = emb * np.sqrt(self.vocab_size)
-        if len(emb.shape) == 2:  emb = emb.unsqueeze(dim=0)  # add batch dimension if not already present
         return self.decoder( self.encoder(emb) ).squeeze(dim=0)[-1]
 
     def init_weights(self, range=0.1):
