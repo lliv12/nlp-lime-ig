@@ -15,3 +15,11 @@ conda install -c pytorch pandas numpy matplotlib pytorch captum
 pip install transformers
 ```
 
+### Training (Examples)
+```
+# Train binary DAN classifier on the reviews dataset
+python train.py -d reviews -t dan -n reviews_classifier -s binary -e 10 -b 32
+
+# Train categorical transformer classifier on the essays dataset
+python train.py -d essays -t transformer -n essays_classifier -s categorical -e 5 -b 32 -sq 500
+```
