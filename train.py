@@ -8,12 +8,19 @@ from torch.nn import MSELoss, CrossEntropyLoss
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 import argparse
+import cProfile
 import time
 
 DEFAULT_MODEL_NAME = "model"
 
 
-def train(model, dataset, device, model_name, verbose=True, score_type='categorical', epochs=10, batch_size=1, lr=0.001):    
+def train(model, dataset, device, model_name, verbose=True, score_type='categorical', epochs=10, batch_size=1, lr=0.001):
+    # Use CUDA if available
+    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu') # torch.device('cpu') #
+    if device == torch.device('cuda'):
+        print("Using cuda")
+    model.to(device)
+    
     # Set loss function to be compatible with the score type
     if(score_type in ['categorical', 'binary']):  loss_fun = CrossEntropyLoss().to(device)
     elif(score_type == 'standardized'):  loss_fun = MSELoss().to(device)
@@ -28,6 +35,8 @@ def train(model, dataset, device, model_name, verbose=True, score_type='categori
         
         start = time.time()
         
+        # with cProfile.Profile() as pr:
+        
         total_loss = 0.0
         num_correct = 0
         num_ex = 0
@@ -37,8 +46,17 @@ def train(model, dataset, device, model_name, verbose=True, score_type='categori
             # make prediction
             pred = model(input_tensor)
             loss = loss_fun(pred, score)
+            # print(score.shape)
+            # print(score)
+            # print(input_tensor.shape)
+            # print(input_tensor)
+            # print(pred.shape)
+            # print(pred)
+            # print(loss)
+            # print(torch.cuda.memory_summary(device=None, abbreviated=False))
+            # raise Exception("test")
 
-            # backpropagate
+            # backpropogate
             model.zero_grad()
             loss.backward()
             optim.step()
@@ -51,8 +69,11 @@ def train(model, dataset, device, model_name, verbose=True, score_type='categori
         end = time.time()
         
         if verbose:
+            # print(torch.cuda.memory_summary(device=None, abbreviated=False))
             print("Epoch {ep}:    loss:   {l}      accuracy:   {a}%".format(ep=e, l=np.round(total_loss / len(dataset), 4), a=np.round(100*float(num_correct) / num_ex, 2)))
             print("Epoch duration:", end - start)
+        # pr.print_stats()
+        # raise NotImplementedError()
     save_model(model, model_name)
 
 
@@ -67,7 +88,7 @@ if __name__ == "__main__":
     parser.add_argument('-b', '--batch_size', type=int, default=1, help="The batch size to use for training. Will pad / cut sequences if set to something other than '1'.")
     parser.add_argument('-lr', '--learning_rate', type=float, default=0.001, help="The learning rate for training.")
     parser.add_argument('-s', '--score_type', choices=['categorical', 'binary', 'standardized'], default='categorical', help="The type of the scores. Be sure this is compatible with the model and dataset you want to use.")
-    parser.add_argument('-sq', '--seq_len', type=int, help="The sequence length to use for training (in #tokens). If batch size is greater than 1, will use 'max' for dataset seq_len.")
+    parser.add_argument('-sq', '--seq_len', type=int, default=1200, help="The sequence length to use for training (in #tokens). If batch size is greater than 1, will use 'max' for dataset seq_len.")
     parser.add_argument('-v', '--verbose', action='store_false', help="Log training progress to the console.")
     parser.add_argument('--cpu_only', action='store_true', help="Only use the cpu during training")
     
