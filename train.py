@@ -8,6 +8,7 @@ from torch.nn import MSELoss, CrossEntropyLoss
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 import argparse
+import time
 
 DEFAULT_MODEL_NAME = "model"
 
@@ -24,6 +25,8 @@ def train(model, dataset, device, model_name, verbose=True, score_type='categori
 
     # TODO:  (possibly) implement a validation loss. This will require splitting the data, though it's prone to sampling bias. For now just use training loss as metric.
     for e in range(epochs):
+        
+        start = time.time()
         
         total_loss = 0.0
         num_correct = 0
@@ -44,9 +47,12 @@ def train(model, dataset, device, model_name, verbose=True, score_type='categori
             total_loss += loss.item()
             num_correct += (score == pred.argmax(dim=1)).sum()
             num_ex += len(score)
+
+        end = time.time()
         
         if verbose:
             print("Epoch {ep}:    loss:   {l}      accuracy:   {a}%".format(ep=e, l=np.round(total_loss / len(dataset), 4), a=np.round(100*float(num_correct) / num_ex, 2)))
+            print("Epoch duration:", end - start)
     save_model(model, model_name)
 
 
