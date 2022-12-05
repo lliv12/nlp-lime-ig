@@ -82,14 +82,25 @@ if __name__ == "__main__":
     parser.add_argument('-b', '--batch_size', type=int, default=1, help="The batch size to use for training. Will pad / cut sequences if set to something other than '1'.")
     parser.add_argument('-lr', '--learning_rate', type=float, default=0.001, help="The learning rate for training.")
     parser.add_argument('-s', '--score_type', choices=['categorical', 'binary', 'standardized'], default='categorical', help="The type of the scores. Be sure this is compatible with the model and dataset you want to use.")
-    parser.add_argument('-sq', '--seq_len', type=int, default=1200, help="The sequence length to use for training (in #tokens). If batch size is greater than 1, will use 'max' for dataset seq_len.")
+    parser.add_argument('-sq', '--seq_len', type=int, help="The sequence length to use for training (in #tokens). Defaults to 1200 for essays and 300 for reviews. If batch size is >1 and seq len is set to 'max', will use the max len for dataset as seq_len.")
     parser.add_argument('-v', '--verbose', action='store_false', help="Log training progress to the console.")
     parser.add_argument('--cpu_only', action='store_true', help="Only use the cpu during training")
-    
+
     args = parser.parse_args()
 
     print("Loading and preparing %s dataset ..." % args.dataset)
-    seq_len = args.seq_len if args.seq_len else ('max' if args.batch_size > 1 else None)
+    if args.seq_len and args.seq_len == 'max':
+        seq_len = 'max' if args.batch_size > 1 else None
+    elif args.seq_len:
+        seq_len = args.seq_len
+    else:
+        if args.dataset == 'essays':
+            seq_len = 1200
+        elif args.dataset == 'reviews':
+            seq_len = 300
+        else:
+            seq_len = None
+    
     dataset_args = {'score_type': args.score_type, 'seq_len': seq_len}
     if args.dataset == 'reviews':
         dataset = ReviewsDataset(**dataset_args) if args.tokenizer == 'default' else ReviewsDataset(args.tokenizer, **dataset_args)
