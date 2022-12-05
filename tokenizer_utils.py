@@ -15,6 +15,8 @@ import os
 REVIEWS_SRC = REVIEWS_DIR + 'reviews_text.txt'
 ESSAYS_SRC = ESSAYS_DIR + 'essays_text.txt'
 
+'''TODO: Unigram LM tokenization (https://huggingface.co/docs/transformers/tokenizer_summary#unigram)
+    as it may giev better results (https://aclanthology.org/2020.findings-emnlp.414/)'''
 
 '''
   -  dataset:  the source dataset to train BPE on ('reviews' or 'essays')

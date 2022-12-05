@@ -14,13 +14,7 @@ import time
 DEFAULT_MODEL_NAME = "model"
 
 
-def train(model, dataset, device, model_name, verbose=True, score_type='categorical', epochs=10, batch_size=1, lr=0.001):
-    # Use CUDA if available
-    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu') # torch.device('cpu') #
-    if device == torch.device('cuda'):
-        print("Using cuda")
-    model.to(device)
-    
+def train(model, dataset, device, model_name, verbose=True, score_type='categorical', epochs=10, batch_size=1, lr=0.001):    
     # Set loss function to be compatible with the score type
     if(score_type in ['categorical', 'binary']):  loss_fun = CrossEntropyLoss().to(device)
     elif(score_type == 'standardized'):  loss_fun = MSELoss().to(device)
