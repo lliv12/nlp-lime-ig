@@ -74,7 +74,7 @@ def train(model, dataset, device, model_name, verbose=True, score_type='categori
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--dataset', choices=['reviews', 'essays'], default='reviews', help="Which dataset want to use.")
-    parser.add_argument('-t', '--model_type', choices=['dan', 'transformer'], default='trans', help="What type of model to use.")
+    parser.add_argument('-t', '--model_type', choices=['dan', 'transformer', 'best'], default='transformer', help="What type of model to use.")
     parser.add_argument('-f', '--model_file', help="The name of the model file to load for training  (loads %s<model_file>.pt)." % MODEL_DIR)
     parser.add_argument('-n', '--model_name', help="What name to give to the model  (will save <model_name>.pt after training is finished).")
     parser.add_argument('-tk', '--tokenizer', default='default', help="If 'default', will load pretrained tokenizer. Otherwise loads tokenizer of the given name (<tokenizer>.pt).")

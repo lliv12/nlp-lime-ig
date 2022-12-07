@@ -6,7 +6,6 @@ from torch import nn
 import torch
 import os
 import numpy as np
-from captum._utils.models.model import Model
 
 MODEL_DIR = "/saved_models/"
 
@@ -66,7 +65,7 @@ class TransformerModel(nn.Module):
     # input:  (batch_size, num_tokens)
     def forward(self, input):
         src_emb = self.embedding(input) * np.sqrt(self.vocab_size)
-        padding_mask = (~input.bool()).long()
+        padding_mask = ~input.bool()#(~input.bool()).long()
         return self.decoder( self.encoder(src_emb, src_key_padding_mask=padding_mask) )[:,-1]
 
     def forward_emb(self, emb):
