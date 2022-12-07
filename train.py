@@ -74,7 +74,7 @@ def train(model, dataset, device, model_name, verbose=True, score_type='categori
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--dataset', choices=['reviews', 'essays'], default='reviews', help="Which dataset want to use.")
-    parser.add_argument('-t', '--model_type', choices=['dan', 'transformer'], default='dan', help="What type of model to use.")
+    parser.add_argument('-t', '--model_type', choices=['dan', 'transformer'], default='trans', help="What type of model to use.")
     parser.add_argument('-f', '--model_file', help="The name of the model file to load for training  (loads %s<model_file>.pt)." % MODEL_DIR)
     parser.add_argument('-n', '--model_name', help="What name to give to the model  (will save <model_name>.pt after training is finished).")
     parser.add_argument('-tk', '--tokenizer', default='default', help="If 'default', will load pretrained tokenizer. Otherwise loads tokenizer of the given name (<tokenizer>.pt).")
@@ -117,15 +117,15 @@ if __name__ == "__main__":
     if args.model_file:
         model = load_model(args.model_file)
     else:
-        if args.score_type == 'standardized':
-            out_size = 1
-        elif args.score_type in ['categorical', 'binary']:
-            out_size = 2 if args.score_type == 'binary' else 5
+        # if args.score_type == 'standardized':
+        #     out_size = 1
+        # elif args.score_type in ['categorical', 'binary']:
+        #     out_size = 2 if args.score_type == 'binary' else len(dataset.get_unique_labels())
 
         if args.model_type == 'dan':
-            model = BasicDANModel(dataset.vocab_size(), out_size=out_size)
+            model = BasicDANModel(dataset.vocab_size(), out_size=len(dataset.get_unique_labels()))
         elif args.model_type == 'transformer':
-            model = TransformerModel(dataset.vocab_size(), out_size=out_size)
+            model = TransformerModel(dataset.vocab_size(), out_size=len(dataset.get_unique_labels()))
         else:
             raise Exception("Unknown model type: '{m}'".format(m=args.model_type))
 

@@ -80,13 +80,14 @@ class BaseDataset(torch.utils.data.Dataset):
       -  get_x_func:  function for retrieving text input at specific index (from pandas DataFrame)
       -  get_y_func:  function for retrieving label at specific index (from pandas DataFrame)
     '''
-    def __init__(self, data, tokenizer, score_type, seq_len, load_mode, get_x_func, get_y_func):
+    def __init__(self, data, tokenizer, score_type, seq_len, load_mode, x_column, y_column, cat_column):
         self.data = data
         self.score_type = score_type
         self.tokenizer = tokenizer_utils.load_model(tokenizer)
         self.load_mode = load_mode
-        self.__get_x = get_x_func
-        self.__get_y = get_y_func
+        self.x_column = x_column
+        self.y_column = y_column
+        self.cat_column = cat_column
 
         # use the max sequence length (in chars) as a heuristic. Get the number of tokens in its encoding.
         self.max_seq_len = len(self.tokenizer.encode( self.__get_x( self.__get_x(range(len(self.data))).str.len().argmax() ) ))
@@ -121,6 +122,56 @@ class BaseDataset(torch.utils.data.Dataset):
     def vocab_size(self):
         return self.tokenizer.get_vocab_size()
 
+    def get_unique_labels(self):
+        return self.data[self.y_column].unique()
+
+    def get_unique_categories(self):
+        return self.data[self.cat_column].unique()
+
+    # Load random examples based on the filter values
+    # category:  filter by category (for reviews: 'type';  for essays: 'essay_set') 
+    # length:    ('int' or 'List[int]')  max length of the example; or bounds of lengths inclusive (in chars)
+    # score:     ('int' or 'List[int]' or 'List[float]')  score of the example or bounds of scores inclusive (must use bounds if score_type == 'standardized')
+    # format:    (default: 'train')  The format of the example you want to return
+    def filter_load(self, category=None, length=None, score=None, n_samples=1, format='train'):
+        result = self.data
+        if category:
+            result = result.loc[result[self.cat_column] == category]
+        if length:
+            if type(length) == int:
+                result = result.loc[result[self.x_column].str.len() >= length]
+            elif type(length) == list:
+                result = result.loc[(result[self.x_column].str.len() >= length[0]) &
+                                    (result[self.x_column].str.len() <= length[1])]
+            else: raise Exception("The datatype of 'length' must be 'int' or 'List';  not '{t}'.".format(t=type(length)))
+        if score != None:
+            if type(score) == int:
+                if self.score_type == 'standardized':  raise Exception("Cannot filter by 'int' score for this dataset. Use List['float'] instead.")
+                result = result.loc[result[self.y_column] == score]
+            elif type(score) == list:
+                result = result.loc[(result[self.y_column] >= score[0]) &
+                                    (result[self.y_column] <= score[1])]
+            else: raise Exception("The datatype of 'score' must be 'int' or 'List';  not '{t}'.".format(t=type(length)))
+        sample = result.sample(n_samples).index
+        if format == 'index':
+            return list(sample)
+        return [self.__getitem__(idx, format) for idx in sample]
+
+    def encode(self, text, mode='encode'):
+        if type(text) == str:
+            enc = self.tokenizer.encode(text)
+        else:
+            enc = self.tokenizer.encode_batch(text)
+        if mode == 'train':
+            enc = torch.Tensor([e.ids for e in enc]).long()
+        return enc
+
+    def __get_x(self, idx):
+        return self.data[self.x_column][idx]
+
+    def __get_y(self, idx):
+        return self.data[self.y_column][idx]
+
     def __prepare_ex(self, idx):
         if self.score_type in ['categorical', 'binary']:
             sub = 1 if self.score_type == 'categorical' else 0
@@ -141,9 +192,7 @@ class ReviewsDataset(BaseDataset):
             print("Training BPE tokenizer ...")
             if BPE_params == 'default':  BPE_params = {'lowercase': True, 'vocab_size': 1000}  # default BPE settings
             tokenizer_utils.train_BPE('reviews', tokenizer, **BPE_params)
-        def __get_x(idx):  return self.data['reviewText'][idx]
-        def __get_y(idx):  return self.data['overall'][idx]
-        super().__init__(load_reviews(score_type=score_type), tokenizer, score_type, seq_len, load_mode, __get_x, __get_y)
+        super().__init__(load_reviews(score_type=score_type), tokenizer, score_type, seq_len, load_mode, 'reviewText', 'overall', 'type')
 
 
 class EssaysDataset(BaseDataset):
@@ -157,6 +206,4 @@ class EssaysDataset(BaseDataset):
             print("Training BPE tokenizer ...")
             if BPE_params=='default':  BPE_params = {'vocab_size': 1000}  # default BPE settings
             tokenizer_utils.train_BPE('essays', tokenizer, **BPE_params)
-        def __get_x(idx):  return self.data['essay'][idx]
-        def __get_y(idx):  return self.data['domain1_score'][idx]
-        super().__init__(load_essays(valid=False, test=False, score_type=score_type)[0], tokenizer, score_type, seq_len, load_mode, __get_x, __get_y)
+        super().__init__(load_essays(valid=False, test=False, score_type=score_type)[0], tokenizer, score_type, seq_len, load_mode, 'essay', 'domain1_score', 'essay_set')

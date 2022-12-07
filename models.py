@@ -6,6 +6,7 @@ from torch import nn
 import torch
 import os
 import numpy as np
+from captum._utils.models.model import Model
 
 MODEL_DIR = "/saved_models/"
 
