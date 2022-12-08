@@ -14,7 +14,7 @@ Project on using model explanation techniques such as LIME and Integrated gradie
 <create conda env>
 conda install -c pytorch pandas numpy matplotlib pytorch captum
 pip install transformers
-pip install lime-python
+pip install lime
 ```
 
 ### Training (Examples)
