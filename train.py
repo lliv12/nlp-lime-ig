@@ -8,13 +8,13 @@ from torch.nn import MSELoss, CrossEntropyLoss
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 import argparse
-import cProfile
 import time
 
 DEFAULT_MODEL_NAME = "model"
+LOG_FILE_NAME = "log_results.csv"
 
 
-def train(model, dataset, device, model_name, verbose=True, score_type='categorical', epochs=10, batch_size=1, lr=0.001):    
+def train(model, dataset, device, model_name, verbose=True, score_type='categorical', epochs=10, batch_size=1, lr=0.001, log_file=None):    
     # Set loss function to be compatible with the score type
     if(score_type in ['categorical', 'binary']):  loss_fun = CrossEntropyLoss().to(device)
     elif(score_type == 'standardized'):  loss_fun = MSELoss().to(device)
@@ -24,13 +24,11 @@ def train(model, dataset, device, model_name, verbose=True, score_type='categori
     optim = Adam(model.parameters(), lr=lr)
     model.train()
 
-    # TODO:  (possibly) implement a validation loss. This will require splitting the data, though it's prone to sampling bias. For now just use training loss as metric.
+    best_accuracy = 0.0
     for e in range(epochs):
         
         start = time.time()
-        
-        # with cProfile.Profile() as pr:
-        
+
         total_loss = 0.0
         num_correct = 0
         num_ex = 0
@@ -40,15 +38,6 @@ def train(model, dataset, device, model_name, verbose=True, score_type='categori
             # make prediction
             pred = model(input_tensor)
             loss = loss_fun(pred, score)
-            # print(score.shape)
-            # print(score)
-            # print(input_tensor.shape)
-            # print(input_tensor)
-            # print(pred.shape)
-            # print(pred)
-            # print(loss)
-            # print(torch.cuda.memory_summary(device=None, abbreviated=False))
-            # raise Exception("test")
 
             # backpropogate
             model.zero_grad()
@@ -62,12 +51,15 @@ def train(model, dataset, device, model_name, verbose=True, score_type='categori
 
         end = time.time()
         
+        accuracy = np.round(100*float(num_correct) / num_ex, 2)
+        best_accuracy = max(best_accuracy, accuracy)
         if verbose:
-            # print(torch.cuda.memory_summary(device=None, abbreviated=False))
-            print("Epoch {ep}:    loss:   {l}      accuracy:   {a}%".format(ep=e, l=np.round(total_loss / len(dataset), 4), a=np.round(100*float(num_correct) / num_ex, 2)))
-            print("Epoch duration:", end - start)
-        # pr.print_stats()
-        # raise NotImplementedError()
+            print("Epoch {ep}:    loss:   {l}      accuracy:   {a}%".format(ep=e, l=np.round(total_loss / len(dataset), 4), a=accuracy))
+            print("Epoch duration:  {t}s".format(t=np.round(end - start, 3)))
+        
+    if log_file:
+        log_file.write("{m}, {a}\n".format(m=model_name, a=best_accuracy))
+
     save_model(model, model_name)
 
 
@@ -85,8 +77,12 @@ if __name__ == "__main__":
     parser.add_argument('-sq', '--seq_len', type=int, help="The sequence length to use for training (in #tokens). Defaults to 1200 for essays and 300 for reviews. If batch size is >1 and seq len is set to 'max', will use the max len for dataset as seq_len.")
     parser.add_argument('-v', '--verbose', action='store_false', help="Log training progress to the console.")
     parser.add_argument('--cpu_only', action='store_true', help="Only use the cpu during training")
+    parser.add_argument('-log', '--log', action='store_true', help="Log model name and training accuracy to the log file.")
 
     args = parser.parse_args()
+
+    if args.log:
+        log_file = open(os.getcwd() + '/' + LOG_FILE_NAME, 'a')
 
     print("Loading and preparing %s dataset ..." % args.dataset)
     if args.seq_len and args.seq_len == 'max':
@@ -132,4 +128,7 @@ if __name__ == "__main__":
     model = model.to(device)
     model_name = args.model_name if args.model_name else (args.model_file if args.model_file else DEFAULT_MODEL_NAME)
     print("Executing ...")
-    train(model, dataset, device, model_name, verbose=args.verbose, score_type=args.score_type, epochs=args.epochs, batch_size=args.batch_size, lr=args.learning_rate)
+    train(model, dataset, device, model_name, verbose=args.verbose, score_type=args.score_type, epochs=args.epochs, batch_size=args.batch_size, lr=args.learning_rate, log_file=log_file)
+
+    if args.log:
+        log_file.close()
