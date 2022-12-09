@@ -139,7 +139,7 @@ class BaseDataset(torch.utils.data.Dataset):
             result = result.loc[result[self.cat_column] == category]
         if length:
             if type(length) == int:
-                result = result.loc[result[self.x_column].str.len() >= length]
+                result = result.loc[result[self.x_column].str.len() <= length]
             elif type(length) == list:
                 result = result.loc[(result[self.x_column].str.len() >= length[0]) &
                                     (result[self.x_column].str.len() <= length[1])]

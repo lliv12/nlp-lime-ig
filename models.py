@@ -14,7 +14,10 @@ def save_model(model, name):
     torch.save(model, os.getcwd() + MODEL_DIR + name + '.pt')
 
 def load_model(model_name):
-    return torch.load(os.getcwd() + MODEL_DIR + model_name + '.pt')
+    if torch.cuda.is_available():
+        return torch.load(os.getcwd() + MODEL_DIR + model_name + '.pt')
+    else:
+        return torch.load(os.getcwd() + MODEL_DIR + model_name + '.pt', map_location=torch.device('cpu'))
 
 class BasicDANModel(nn.Module):
 
