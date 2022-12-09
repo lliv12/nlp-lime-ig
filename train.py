@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader
 import argparse
 import cProfile
 import time
+from sklearn import metrics
 
 DEFAULT_MODEL_NAME = "model"
 
@@ -34,21 +35,14 @@ def train(model, dataset, device, model_name, verbose=True, score_type='categori
         total_loss = 0.0
         num_correct = 0
         num_ex = 0
+        pred_labels = np.array([])
+        correct_labels = np.array([])
         for ex in data_loader:
             input_tensor, score = ex[0].to(device), ex[1].to(device)
             
             # make prediction
             pred = model(input_tensor)
-            loss = loss_fun(pred, score)
-            # print(score.shape)
-            # print(score)
-            # print(input_tensor.shape)
-            # print(input_tensor)
-            # print(pred.shape)
-            # print(pred)
-            # print(loss)
-            # print(torch.cuda.memory_summary(device=None, abbreviated=False))
-            # raise Exception("test")
+            loss = loss_fun(pred, score)            
 
             # backpropogate
             model.zero_grad()
@@ -59,12 +53,15 @@ def train(model, dataset, device, model_name, verbose=True, score_type='categori
             total_loss += loss.item()
             num_correct += (score == pred.argmax(dim=1)).sum()
             num_ex += len(score)
+            pred_labels = np.append(pred_labels, pred.detach().to(torch.device('cpu')).argmax(dim=1).numpy())
+            correct_labels = np.append(correct_labels, ex[1].detach().numpy())
 
         end = time.time()
         
         if verbose:
             # print(torch.cuda.memory_summary(device=None, abbreviated=False))
-            print("Epoch {ep}:    loss:   {l}      accuracy:   {a}%".format(ep=e, l=np.round(total_loss / len(dataset), 4), a=np.round(100*float(num_correct) / num_ex, 2)))
+            print("Epoch {ep} | \nloss: {l} -- accuracy: {a}% -- F1-score: {f}"
+                  .format(ep=e, l=np.round(total_loss / len(dataset), 4), a=np.round(100*float(num_correct) / num_ex, 2), f=metrics.f1_score(pred_labels, correct_labels, average='weighted')))
             print("Epoch duration:", end - start)
         # pr.print_stats()
         # raise NotImplementedError()
@@ -83,6 +80,12 @@ if __name__ == "__main__":
     parser.add_argument('-lr', '--learning_rate', type=float, default=0.001, help="The learning rate for training.")
     parser.add_argument('-s', '--score_type', choices=['categorical', 'binary', 'standardized'], default='categorical', help="The type of the scores. Be sure this is compatible with the model and dataset you want to use.")
     parser.add_argument('-sq', '--seq_len', type=int, help="The sequence length to use for training (in #tokens). Defaults to 1200 for essays and 300 for reviews. If batch size is >1 and seq len is set to 'max', will use the max len for dataset as seq_len.")
+    
+    parser.add_argument('-em', '--embed_dim', type=int, default=128, help="The embedding dimension.")
+    parser.add_argument('-ah', '--attn_head', type=int, default=1, help="The number of attention heads to use.")
+    parser.add_argument('-l', '--num_layers', type=int, default=1, help="The number of transformer layers to use.")
+    parser.add_argument('-ffd', '--feedforward_dim', type=int, default=512, help="The internal feed forward dimension to use.")
+    
     parser.add_argument('-v', '--verbose', action='store_false', help="Log training progress to the console.")
     parser.add_argument('--cpu_only', action='store_true', help="Only use the cpu during training")
 
@@ -125,7 +128,7 @@ if __name__ == "__main__":
         if args.model_type == 'dan':
             model = BasicDANModel(dataset.vocab_size(), out_size=len(dataset.get_unique_labels()))
         elif args.model_type == 'transformer':
-            model = TransformerModel(dataset.vocab_size(), out_size=len(dataset.get_unique_labels()))
+            model = TransformerModel(dataset.vocab_size(), args.embed_dim, args.attn_head, args.num_layers, args.feedforward_dim, out_size=len(dataset.get_unique_labels()))
         else:
             raise Exception("Unknown model type: '{m}'".format(m=args.model_type))
 
