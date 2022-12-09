@@ -24,7 +24,10 @@ def train(model, dataset, device, model_name, verbose=True, score_type='categori
     data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     optim = Adam(model.parameters(), lr=lr)
     model.train()
-
+    
+    if log_file:
+        log_file.write("{m}\n".format(m=model_name))
+        
     best_accuracy = 0.0
     for e in range(epochs):
         
@@ -63,9 +66,13 @@ def train(model, dataset, device, model_name, verbose=True, score_type='categori
             print("Epoch {ep} | \nloss: {l} -- accuracy: {a}% -- F1-score: {f}"
                   .format(ep=e, l=np.round(total_loss / len(dataset), 4), a=accuracy, f=metrics.f1_score(pred_labels, correct_labels, average='weighted')))
             print("Epoch duration: {t}s".format(t=np.round(end - start, 3)))
-        
         if log_file:
-            log_file.write("{m}, {a}\n".format(m=model_name, a=best_accuracy))
+            log_file.write("Epoch {ep} | \nloss: {l} -- accuracy: {a}% -- F1-score: {f}"
+                  .format(ep=e, l=np.round(total_loss / len(dataset), 4), a=accuracy, f=metrics.f1_score(pred_labels, correct_labels, average='weighted')))
+            log_file.write("Epoch duration: {t}s".format(t=np.round(end - start, 3)))            
+        
+    if log_file:
+        log_file.write("Best accuracy: {a}\n".format(a=best_accuracy))
         
     save_model(model, model_name)
 
