@@ -64,15 +64,15 @@ def train(model, dataset, device, model_name, verbose=True, score_type='categori
         if verbose:
             # print(torch.cuda.memory_summary(device=None, abbreviated=False))
             print("Epoch {ep} | \nloss: {l} -- accuracy: {a}% -- F1-score: {f}"
-                  .format(ep=e, l=np.round(total_loss / len(dataset), 4), a=accuracy, f=metrics.f1_score(pred_labels, correct_labels, average='weighted')))
+                  .format(ep=e, l=np.round(total_loss / len(dataset), 4), a=accuracy, f=np.round(metrics.f1_score(pred_labels, correct_labels, average='weighted'),3)))
             print("Epoch duration: {t}s".format(t=np.round(end - start, 3)))
         if log_file:
-            log_file.write("Epoch {ep} | \nloss: {l} -- accuracy: {a}% -- F1-score: {f}"
-                  .format(ep=e, l=np.round(total_loss / len(dataset), 4), a=accuracy, f=metrics.f1_score(pred_labels, correct_labels, average='weighted')))
-            log_file.write("Epoch duration: {t}s".format(t=np.round(end - start, 3)))            
+            log_file.write("{ep},{l},{a},{f},{t}\n"
+                  .format(ep=e, l=np.round(total_loss / len(dataset), 4), a=accuracy, f=np.round(metrics.f1_score(pred_labels, correct_labels, average='weighted'), 3), t=np.round(end - start, 3)))
+            # log_file.write("Epoch duration: {t}s".format(t=np.round(end - start, 3)))            
         
     if log_file:
-        log_file.write("Best accuracy: {a}\n".format(a=best_accuracy))
+        log_file.write("{a}\n".format(a=best_accuracy))
         
     save_model(model, model_name)
 
@@ -102,7 +102,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.log:
-        log_file = open(os.getcwd() + '/' + LOG_FILE_NAME, 'a')
+        log_file = open(os.getcwd() + '/' + 'log_' + args.model_name + '.csv', 'a')
+    else:
+        log_file = None
 
     print("Loading and preparing %s dataset ..." % args.dataset)
     if args.seq_len and args.seq_len == 'max':
