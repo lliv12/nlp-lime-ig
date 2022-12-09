@@ -43,6 +43,7 @@ def train(model, dataset, device, model_name, verbose=True, score_type='categori
             
             # make prediction
             pred = model(input_tensor)
+            if score_type == 'standardized':  pred = pred.squeeze()
             loss = loss_fun(pred, score)
 
             # backpropogate
@@ -52,27 +53,37 @@ def train(model, dataset, device, model_name, verbose=True, score_type='categori
 
             # logging
             total_loss += loss.item()
-            num_correct += (score == pred.argmax(dim=1)).sum()
-            num_ex += len(score)
-            pred_labels = np.append(pred_labels, pred.detach().to(torch.device('cpu')).argmax(dim=1).numpy())
-            correct_labels = np.append(correct_labels, ex[1].detach().numpy())
+            if score_type != 'standardized':
+                num_correct += (score == pred.argmax(dim=1)).sum()
+                num_ex += len(score)
+                pred_labels = np.append(pred_labels, pred.detach().to(torch.device('cpu')).argmax(dim=1).numpy())
+                correct_labels = np.append(correct_labels, ex[1].detach().numpy())
 
         end = time.time()
         
-        accuracy = np.round(100*float(num_correct) / num_ex, 2)
-        best_accuracy = max(best_accuracy, accuracy)
+        if score_type != 'standardized':
+            accuracy = np.round(100*float(num_correct) / num_ex, 2)
+            best_accuracy = max(best_accuracy, accuracy)
         if verbose:
             # print(torch.cuda.memory_summary(device=None, abbreviated=False))
-            print("Epoch {ep} | \nloss: {l} -- accuracy: {a}% -- F1-score: {f}"
-                  .format(ep=e, l=np.round(total_loss / len(dataset), 4), a=accuracy, f=np.round(metrics.f1_score(pred_labels, correct_labels, average='weighted'),3)))
+            if score_type != 'standardized':
+                print("Epoch {ep} | \nloss: {l} -- accuracy: {a}% -- F1-score: {f}"
+                    .format(ep=e, l=np.round(total_loss / len(dataset), 4), a=accuracy, f=np.round(metrics.f1_score(pred_labels, correct_labels, average='weighted'),3)))
+            else:
+                print("Epoch {ep} | \nloss: {d} -- average MSE distance: {d}".format(ep=e, d=np.round(total_loss / len(dataset), 4)))
             print("Epoch duration: {t}s".format(t=np.round(end - start, 3)))
         if log_file:
-            log_file.write("{ep},{l},{a},{f},{t}\n"
-                  .format(ep=e, l=np.round(total_loss / len(dataset), 4), a=accuracy, f=np.round(metrics.f1_score(pred_labels, correct_labels, average='weighted'), 3), t=np.round(end - start, 3)))
-            # log_file.write("Epoch duration: {t}s".format(t=np.round(end - start, 3)))            
+            if score_type != 'standardized':
+                log_file.write("{ep},{l},{a},{f},{t}\n"
+                    .format(ep=e, l=np.round(total_loss / len(dataset), 4), a=accuracy, f=np.round(metrics.f1_score(pred_labels, correct_labels, average='weighted'), 3), t=np.round(end - start, 3)))
+            else:
+                log_file.write("{ep},{l},{t}\n".format(ep=e, l=np.round(total_loss / len(dataset), 4), t=np.round(end - start, 3)))          
         
     if log_file:
-        log_file.write("{a}\n".format(a=best_accuracy))
+        if score_type == 'standardized':
+            log_file.write("{d}\n".format(d=np.round(total_loss / len(dataset), 4)))
+        else:
+            log_file.write("{a}\n".format(a=best_accuracy))
         
     save_model(model, model_name)
 
@@ -139,11 +150,12 @@ if __name__ == "__main__":
         #     out_size = 1
         # elif args.score_type in ['categorical', 'binary']:
         #     out_size = 2 if args.score_type == 'binary' else len(dataset.get_unique_labels())
+        out_size = 1 if (args.score_type == 'standardized') else len(dataset.get_unique_labels())
 
         if args.model_type == 'dan':
-            model = BasicDANModel(dataset.vocab_size(), out_size=len(dataset.get_unique_labels()))
+            model = BasicDANModel(dataset.vocab_size(), out_size=out_size)
         elif args.model_type == 'transformer':
-            model = TransformerModel(dataset.vocab_size(), args.embed_dim, args.attn_head, args.num_layers, args.feedforward_dim, out_size=len(dataset.get_unique_labels()))
+            model = TransformerModel(dataset.vocab_size(), args.embed_dim, args.attn_head, args.num_layers, args.feedforward_dim, out_size=out_size)
         else:
             raise Exception("Unknown model type: '{m}'".format(m=args.model_type))
 
