@@ -47,7 +47,7 @@ class TransformerModel(nn.Module):
       -  dim_feedforward:  the dimension of the feedforward output for each intermediate transformer encoder layer
       -  out_size:  the output dimension of the whole network
     '''
-    def __init__(self, vocab_size, emb_dim=16, nhead=1, num_encoder_layers=1, dim_feedforward=512, out_size=1):
+    def __init__(self, vocab_size, emb_dim=32, nhead=1, num_encoder_layers=1, dim_feedforward=512, out_size=1):
         super().__init__()
         self.vocab_size = vocab_size
         self.embedding = nn.Embedding(vocab_size, emb_dim)
