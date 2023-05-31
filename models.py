@@ -1,23 +1,37 @@
-##################################################
-# NN Model definitions.
-##################################################
+'''
+models.py
+
+Model definitions and functions for loading / saving models.
+'''
 
 from torch import nn
 import torch
-import os
 import numpy as np
+import math
+import os
 
-MODEL_DIR = "/saved_models/"
+MODEL_DIR = "saved_models"
 
 
-def save_model(model, name):
-    torch.save(model, os.getcwd() + MODEL_DIR + name + '.pt')
+def save_model(model, model_name):
+    torch.save(model.state_dict, os.path.join(MODEL_DIR, model_name + '.pt'))
 
-def load_model(model_name):
-    if torch.cuda.is_available():
-        return torch.load(os.getcwd() + MODEL_DIR + model_name + '.pt')
+def load_model(model_type=None, model_name=None, **kwargs):
+    if model_type:
+        if model_type == 'BasicDANModel':
+            return BasicDANModel(**kwargs)
+        elif model_type == 'TransformerModel':
+            return TransformerModel(**kwargs)
+        else:
+            raise Exception("Unknown model type: '{m}'".format(m=model_type))
+    elif model_name:
+        load_dir = os.path.join(MODEL_DIR, model_name + '.pt')
+        if torch.cuda.is_available():
+            return torch.load(load_dir)
+        else:
+            return torch.load(load_dir, map_location=torch.device('cpu'))
     else:
-        return torch.load(os.getcwd() + MODEL_DIR + model_name + '.pt', map_location=torch.device('cpu'))
+        raise Exception("Must specify 'model_type' or 'model_name'.")
 
 class BasicDANModel(nn.Module):
 
@@ -50,7 +64,7 @@ class TransformerModel(nn.Module):
       -  dim_feedforward:  the dimension of the feedforward output for each intermediate transformer encoder layer
       -  out_size:  the output dimension of the whole network
     '''
-    def __init__(self, vocab_size, emb_dim=32, nhead=1, num_encoder_layers=1, dim_feedforward=512, out_size=1):
+    def __init__(self, vocab_size, emb_dim=128, nhead=8, num_encoder_layers=6, dim_feedforward=512, out_size=1):
         super().__init__()
         self.vocab_size = vocab_size
         self.embedding = nn.Embedding(vocab_size, emb_dim)
@@ -68,7 +82,7 @@ class TransformerModel(nn.Module):
     # input:  (batch_size, num_tokens)
     def forward(self, input):
         src_emb = self.embedding(input) * np.sqrt(self.vocab_size)
-        padding_mask = ~input.bool()#(~input.bool()).long()
+        padding_mask = ~input.bool()
         return self.decoder( self.encoder(src_emb, src_key_padding_mask=padding_mask) )[:,-1]
 
     def forward_emb(self, emb):
