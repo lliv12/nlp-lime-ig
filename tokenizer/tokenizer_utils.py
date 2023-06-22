@@ -13,9 +13,6 @@ from tokenizers.trainers import BpeTrainer
 
 TOKENIZERS_DIR = 'tokenizer'
 
-'''TODO: Unigram LM tokenization (https://huggingface.co/docs/transformers/tokenizer_summary#unigram)
-    as it may give better results (https://aclanthology.org/2020.findings-emnlp.414/)'''
-
 '''
 Train a tokenizer through the Byte-pair encoding (BPE) algorithm
   -  dataset:  the source dataset to train BPE on ('reviews' or 'essays')
@@ -25,7 +22,7 @@ Train a tokenizer through the Byte-pair encoding (BPE) algorithm
   -  special_tokens:  List of strings to add as (permanent) tokens to the model
   -  vocab_size:  The resulting number of tokens the model will generate (and encode with)
 '''
-def train_BPE(tokenizer_name, iterator, whitespace=True, lowercase=False, special_tokens=None, vocab_size=None):
+def train_BPE(tokenizer_name, dataset, iterator, whitespace=True, lowercase=False, special_tokens=None, vocab_size=None):
     tokenizer = Tokenizer( model=BPE() )
     if(whitespace):  tokenizer.pre_tokenizer = Whitespace()
     if(lowercase):  tokenizer.normalizer = Lowercase()
@@ -34,7 +31,11 @@ def train_BPE(tokenizer_name, iterator, whitespace=True, lowercase=False, specia
     trainer = BpeTrainer(special_tokens=special_tokens, vocab_size=vocab_size)
     tokenizer.train_from_iterator(iterator=iterator, trainer=trainer)
 
-    tokenizer.save(os.path.join(TOKENIZERS_DIR, tokenizer_name + '.json'))
+    tokenizer.save(os.path.join(TOKENIZERS_DIR, dataset, tokenizer_name + '.json'))
 
-def load_tokenizer(tokenizer_name):
-    return Tokenizer.from_file(os.path.join(TOKENIZERS_DIR, tokenizer_name + '.json'))
+def load_tokenizer(tokenizer_name, dataset=None):
+    if dataset:
+        filepath = os.path.join(TOKENIZERS_DIR, dataset, tokenizer_name + '.json')
+    else:
+        filepath = os.path.join(TOKENIZERS_DIR, tokenizer_name + '.json')
+    return Tokenizer.from_file(filepath)

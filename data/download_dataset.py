@@ -8,14 +8,14 @@ NOTE: The essays must be downloaded separately from Kaggle. A Kaggle account is 
 from here:  https://www.kaggle.com/competitions/asap-aes/data and extract into dataset/kaggle.
 
 Schema:
-python data/download_dataset.py --cat_spec --cat --limit --verbose
-  --cat_spec:  filepath to a csv file containing the review categories to be downloaded. (if --cat is specified, that will have priority)
+python -m data.download_dataset --cat_spec --cat --limit --verbose
+  --cat_spec:  filepath to a csv file containing the review categories to be downloaded. If 'all', then download all reviews. (if --cat is specified, that will have priority)
   --cat:  a list of reviews categories to be downloaded.  (Ex: <review1> <review2> ... <reviewN>)
   --limit:  limit the number of reviews per json file
   --verbose:  whether or not to log progress of downloading to the console (default: True)
 
 (Example)
-python data/download_dataset.py --cat digital_music luxury_beauty musical_instruments --limit 5000
+python -m data.download_dataset --cat digital_music luxury_beauty musical_instruments --limit 5000
 '''
 
 import os
@@ -108,7 +108,7 @@ def download_amazon_reviews(categories, limit=None, verbose=True):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--cat_spec', default='data/amazon_default.csv', help='filepath to a csv file containing the review categories to be downloaded. (if --cat is specified, that will have priority)')
+    parser.add_argument('--cat_spec', default='data/amazon_default.csv', help="filepath to a csv file containing the review categories to be downloaded. If 'all', then download all reviews. (if --cat is specified, that will have priority)")
     parser.add_argument('--cat', nargs='+', choices=list(AMAZON_DICT.keys()), help="which Amazon reviews categories to download.")
     parser.add_argument('--limit', type=int, help='limit the number of reviews per json file')
     parser.add_argument('--verbose', default=True, help='whether or not to log progress of downloading to the console')
@@ -117,6 +117,9 @@ if __name__ == "__main__":
     if args.cat:
         download_amazon_reviews(args.cat, args.limit, args.verbose)
     else:
-        with open(args.cat_spec, 'r') as file:
-            cat = list(csv.reader(file, delimiter=',', skipinitialspace=True))[0]
+        if args.cat_spec == 'all':
+            cat = list(AMAZON_DICT.keys())
+        else:
+            with open(args.cat_spec, 'r') as file:
+                cat = list(csv.reader(file, delimiter=',', skipinitialspace=True))[0]
         download_amazon_reviews(cat, args.limit, args.verbose)

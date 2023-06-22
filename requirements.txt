@@ -10,3 +10,7 @@ matplotlib
 ipykernel
 comtypes
 captum
+tensorboard
+torcheval
+tkhtmlview
+tkinterhtml

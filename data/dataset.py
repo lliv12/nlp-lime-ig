@@ -4,9 +4,9 @@ dataset.py
 Dataset modules and utilities are located in here.
 '''
 
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+# import sys
+# from pathlib import Path
+# sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import os
 import torch
@@ -14,10 +14,11 @@ from torch.utils.data import Dataset
 from torch.utils.data.sampler import Sampler
 from torch.nn.utils.rnn import pad_sequence
 import pandas as pd
-from tokenizer.tokenizer_utils import TOKENIZERS_DIR, load_tokenizer, train_BPE
+from tokenizer.tokenizer_utils import load_tokenizer, train_BPE
 import torch
 import numpy as np
 import re
+from typing import Iterator
 
 
 AMAZON_DATASET_DIR = "dataset/amazon"
@@ -45,13 +46,11 @@ def load_reviews(files=None):
 def load_essays(train=True, valid=False, test=False):
     results = []
     if train:
-        results.append( pd.read_excel(os.path.join(KAGGLE_DATASET_DIR, KAGGLE_DATASET_FILES['train'])) )
+        results.append( preprocess_essays(pd.read_excel(os.path.join(KAGGLE_DATASET_DIR, KAGGLE_DATASET_FILES['train']))) )
     if valid:
         results.append( pd.read_excel(os.path.join(KAGGLE_DATASET_DIR, KAGGLE_DATASET_FILES['val'])) )
     if test:
         results.append( pd.read_csv(os.path.join(KAGGLE_DATASET_DIR, KAGGLE_DATASET_FILES['test']), delimiter='\t', encoding='ISO-8859-1') )
-
-    results = [preprocess_essays(df) for df in results]
 
     return results if len(results) > 1 else results[0]
 
@@ -100,12 +99,14 @@ class BaseDataset(Dataset):
       -  get_x_func:  function for retrieving text input at specific index (from pandas DataFrame)
       -  get_y_func:  function for retrieving label at specific index (from pandas DataFrame)
     '''
-    def __init__(self, data, tokenizer, x_column, y_column, cat_column):
+    def __init__(self, dataset_type, data, tokenizer, x_column, y_column, cat_column):
+        self.type = dataset_type
         self.data = data
-        self.tokenizer = load_tokenizer(tokenizer)
         self.x_column = x_column
         self.y_column = y_column
         self.cat_column = cat_column
+        self.num_classes = len(self.get_unique_labels())
+        self.load_tokenizer(tokenizer)
 
     '''
       -  idx:  the index of the item in this dataset
@@ -134,11 +135,13 @@ class BaseDataset(Dataset):
         return self.data[self.cat_column].unique()
 
     # Load random examples based on the filter values
-    # category:  filter by category (for reviews: 'type';  for essays: 'essay_set') 
-    # length:    ('int' or 'List[int]')  max length of the example; or bounds of lengths inclusive (in chars)
-    # score:     ('int' or 'List[int]' or 'List[float]')  score of the example or bounds of scores inclusive (must use bounds if score_type == 'standardized')
-    # format:    (default: 'train')  The format of the example you want to return
-    def filter_load(self, category=None, length=None, score=None, n_samples=1, format='train'):
+    # category:   filter by category (for reviews: 'type';  for essays: 'essay_set') 
+    # length:     ('int' or 'List[int]')  max length of the example; or bounds of lengths inclusive (in chars)
+    # score:      ('int' or 'List[int]' or 'List[float]')  score of the example or bounds of scores inclusive
+    # df_params:  (dict  {'df_column': val or List[val]})  filter by other columns specified in the underlying df (specify column: value for each), a List means list of values
+    # n_samples:  ('int')  how many examples to sample
+    # format:     (default: 'train')  The format of the example you want to return
+    def filter_load(self, category=None, length=None, score=None, df_params=None, n_samples=1, format='train'):
         result = self.data
         if category:
             result = result.loc[result[self.cat_column] == category]
@@ -151,12 +154,17 @@ class BaseDataset(Dataset):
             else: raise Exception("The datatype of 'length' must be 'int' or 'List';  not '{t}'.".format(t=type(length)))
         if score != None:
             if type(score) == int:
-                if self.score_type == 'standardized':  raise Exception("Cannot filter by 'int' score for this dataset. Use List['float'] instead.")
                 result = result.loc[result[self.y_column] == score]
             elif type(score) == list:
                 result = result.loc[(result[self.y_column] >= score[0]) &
                                     (result[self.y_column] <= score[1])]
             else: raise Exception("The datatype of 'score' must be 'int' or 'List';  not '{t}'.".format(t=type(length)))
+        if df_params != None:
+            for column, val in df_params.items():
+                if type(val) == list:
+                    result = result.loc[result[column].isin(val)]
+                else:
+                    result = result.loc[result[column] == val]
         sample = result.sample(n_samples).index
         if format == 'index':
             return list(sample)
@@ -172,11 +180,27 @@ class BaseDataset(Dataset):
         return enc
 
     def compute_class_weights(self):
-        def softmax(x):
-            e_x = np.exp(x - np.max(x))
-            return e_x / e_x.sum(axis=0)
-        vcounts_inv = 1 - self.data[self.y_column].value_counts(normalize=True)
-        return torch.tensor(softmax(vcounts_inv.sort_index()).values, dtype=torch.float)
+        vcounts_inv = 1 / self.data[self.y_column].value_counts(normalize=True)
+        return torch.tensor(vcounts_inv.sort_index().values, dtype=torch.float)
+    
+    def load_tokenizer(self, tokenizer_name=None):
+        def load_default():
+            try:
+                self.tokenizer = load_tokenizer(self.DEFAULT_TOKENIZER, self.type)
+            except:
+                # train a tokenizer if we must or if there's no tokenizer of the given name.
+                print(f"Default tokenizer '{self.DEFAULT_TOKENIZER}' not found. Re-training BPE tokenizer ...")
+                train_BPE(tokenizer_name, self.type, self.SOURCE_GENERATOR, **self.BPE_PARAMS)
+                self.tokenizer = load_tokenizer(tokenizer_name, self.type)
+        
+        if not tokenizer_name:
+            load_default()
+        else:
+            try:
+                self.tokenizer = load_tokenizer(tokenizer_name, self.type)
+            except:
+                print(f"Failed to find tokenizer '{tokenizer_name}'. Using default tokenizer instead.")
+                load_default()
 
     def __get_x(self, idx):
         return self.data[self.x_column][idx]
@@ -190,60 +214,71 @@ class BaseDataset(Dataset):
 
 
 class ReviewsDataset(BaseDataset):
+    DEFAULT_TOKENIZER = "reviews_tokenizer"
+    SPECIAL_TOKENS = [PADDING_TOKEN]
+    BPE_PARAMS = {'lowercase': True, 'vocab_size': 1000, 'special_tokens': SPECIAL_TOKENS}  # default BPE settings
+    SOURCE_GENERATOR = reviews_source_generator()
     '''
       -  BPE_params:  optional parameters for training byte-pair encoder. Check out tokenizer_utils.train_BPE for list of options
     '''
-    def __init__(self, tokenizer='reviews_tokenizer', force_retrain=False):
-        # train a tokenizer if we must or if there's no tokenizer of the given name.
-        if force_retrain or tokenizer not in [f.split('.')[0] for f in os.listdir(TOKENIZERS_DIR)]:
-            print("Training BPE tokenizer ...")
-            special_tokens = [PADDING_TOKEN]
-            BPE_params = {'lowercase': True, 'vocab_size': 1000, 'special_tokens': special_tokens}  # default BPE settings
-            train_BPE(tokenizer, reviews_source_generator(), **BPE_params)
-        super().__init__(load_reviews(), tokenizer, 'reviewText', 'overall', 'type')
+    def __init__(self, tokenizer=DEFAULT_TOKENIZER):
+        super().__init__('reviews', load_reviews(), tokenizer, 'reviewText', 'overall', 'type')
 
 
 class EssaysDataset(BaseDataset):
+    DEFAULT_TOKENIZER = "essays_tokenizer"
+    SPECIAL_TOKENS = [PADDING_TOKEN] + NER_TOKENS
+    BPE_PARAMS = {'vocab_size': 1000, 'special_tokens': SPECIAL_TOKENS}  # default BPE settings
+    SOURCE_GENERATOR = essays_source_generator()
     '''
       -  BPE_params:  optional parameters for training byte-pair encoder. Check out tokenizer_utils.train_BPE for list of options
     '''
-    def __init__(self, tokenizer='essays_tokenizer', force_retrain=False):
-        # train a tokenizer if we must or if there's no tokenizer of the given name.
-        if force_retrain or tokenizer not in [f.split('.')[0] for f in os.listdir(TOKENIZERS_DIR)]:
-            print("Training BPE tokenizer ...")
-            special_tokens = [PADDING_TOKEN] + NER_TOKENS
-            BPE_params = {'vocab_size': 1000, 'special_tokens': special_tokens}  # default BPE settings
-            train_BPE(tokenizer, essays_source_generator(), **BPE_params)
-        super().__init__(load_essays(), tokenizer, 'essay', 'domain1_score', 'essay_set')
+    def __init__(self, tokenizer=DEFAULT_TOKENIZER):
+        super().__init__('essays', load_essays(), tokenizer, 'essay', 'domain1_score', 'essay_set')
 
 
 class BucketSampler(Sampler):
 
-    def __init__(self, data_source: Dataset, batch_size: int, shuffle: bool = True):
+    def __init__(self, data_source: BaseDataset, batch_size: int, shuffle: bool = True, undersample: bool = False, oversample: bool = False):
         super().__init__(data_source)
+        if undersample and oversample:
+            raise Exception("Specify either 'undersample' or 'oversample', but not both.")
         self.data_source = data_source
         self.batch_size = batch_size
         self.shuffle = shuffle
 
-    def __iter__(self):
-        indices = list(range(len(self.data_source)))
-        if self.shuffle:
-            np.random.shuffle(indices)
-
+        if undersample:
+            self.indices = self._undersampled_indices()
+        elif oversample:
+            self.indices = self._oversampled_indices()
+        else:
+            self.indices = list(range(len(self.data_source)))
         # sort indices by sequence length
-        indices.sort(key=lambda i: len(self.data_source[i][0]))
+        self.indices.sort(key=lambda i: len(self.data_source[i][0]))
 
-        # create batches of indices
-        batches = [indices[i:i+self.batch_size] for i in range(0, len(indices), self.batch_size)]
-
-        # shuffle the batches
+    def __iter__(self) -> Iterator[int]:
         if self.shuffle:
-            np.random.shuffle(batches)
-
-        return iter(batches)
+            for idx in torch.randperm(len(self.indices) // self.batch_size).tolist():
+                start_idx = idx * self.batch_size
+                end_idx = min(start_idx + self.batch_size, len(self.indices))
+                yield self.indices[start_idx:end_idx]
+        else:
+            for idx in torch.arange(0, len(self.indices), self.batch_size, dtype=torch.int32).tolist():
+                upper_bound = min(idx+self.batch_size, len(self.indices))
+                yield self.indices[idx:upper_bound]
 
     def __len__(self):
-        return (len(self.data_source) + self.batch_size - 1) // self.batch_size
+        return (len(self.indices) + self.batch_size - 1) // self.batch_size
+
+    def _undersampled_indices(self):
+        n_sample = self.data_source.dataset.data.iloc[self.data_source.indices][self.data_source.dataset.y_column].value_counts().min()
+        undersampled_df = self.data_source.dataset.data.iloc[self.data_source.indices].reset_index(drop=True).groupby(self.data_source.dataset.y_column).apply(lambda x: x.sample(n=n_sample))
+        return [idx[1] for idx in undersampled_df.index]
+
+    def _oversampled_indices(self):
+        n_sample = self.data_source.dataset.data.iloc[self.data_source.indices][self.data_source.dataset.y_column].value_counts().max()
+        oversampled_df = self.data_source.dataset.data.iloc[self.data_source.indices].reset_index(drop=True).groupby(self.data_source.dataset.y_column).apply(lambda x: x.sample(n=n_sample, replace=True))
+        return [idx[1] for idx in oversampled_df.index]
 
 def padding_collate_func(data):
     # data is a list of tuples (sequence, label)

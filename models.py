@@ -13,9 +13,14 @@ import os
 MODEL_DIR = "saved_models"
 
 
-def save_model(model, model_name):
-    torch.save(model.state_dict, os.path.join(MODEL_DIR, model_name + '.pt'))
+def save_model(model, model_name, tokenizer_name):
+    model_dict = {'model': model, 'tokenizer': tokenizer_name}
+    torch.save(model_dict, os.path.join(MODEL_DIR, model_name + '.pt'))
 
+'''
+(if model_type):  Returns:  model
+(if model_name):  Returns:  {model, tokenizer}
+'''
 def load_model(model_type=None, model_name=None, **kwargs):
     if model_type:
         if model_type == 'BasicDANModel':

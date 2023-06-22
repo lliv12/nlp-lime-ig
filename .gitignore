@@ -3,3 +3,4 @@ __pycache__/
 .vscode
 dataset/
 saved_models/
+logs/
