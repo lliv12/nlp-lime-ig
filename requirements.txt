@@ -13,4 +13,4 @@ captum
 tensorboard
 torcheval
 tkhtmlview
-tkinterhtml
+huggingface_hub

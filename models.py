@@ -11,6 +11,8 @@ import math
 import os
 
 MODEL_DIR = "saved_models"
+REVIEWS_SUBDIR = 'reviews'
+ESSAYS_SUBDIR = 'essays'
 
 
 def save_model(model, model_name, tokenizer_name):

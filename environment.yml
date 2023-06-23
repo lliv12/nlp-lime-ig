@@ -1,0 +1,25 @@
+name: nlp-lime-ig
+channels:
+  - pytorch
+  - anaconda
+  - huggingface
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pytorch::pytorch
+  - anaconda::numpy
+  - anaconda::pandas
+  - huggingface::tokenizers
+  - conda-forge::tqdm
+  - anaconda::requests
+  - anaconda::openpyxl
+  - anaconda::xlrd
+  - conda-forge::matplotlib
+  - anaconda::ipykernel
+  - pytorch::captum
+  - conda-forge::tensorboard
+  - huggingface_hub
+  - pip:
+    - torcheval
+    - tkhtmlview
+    - tkinterhtml
