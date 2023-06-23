@@ -19,7 +19,7 @@ import requests
 from models import MODEL_DIR, REVIEWS_SUBDIR, ESSAYS_SUBDIR
 
 REVIEWS_MODELS = {
-    'basic_transformer_reviews': {'REPO_ID': 'lliv12/regular_classifier_best', 'FILE': 'basic_transformer_reviews.pt'},
+    'basic_transformer_reviews': {'REPO_ID': 'lliv12/basic_transformer_reviews', 'FILE': 'basic_transformer_reviews.pt'},
     'transformer_reviews_5000': {'REPO_ID': 'lliv12/transformer_reviews_5000', 'FILE': 'transformer_reviews_5000.pt'}
 }
 ESSAYS_MODELS = {
@@ -36,8 +36,10 @@ if __name__ == "__main__":
     if not os.path.exists(MODEL_DIR):
         os.makedirs(MODEL_DIR)
 
-    reviews_models = set(args.model).intersection(list(REVIEWS_MODELS.keys()))
-    essays_models = set(args.model).intersection(list(ESSAYS_MODELS.keys()))
+    models = args.model if (args.model != 'all') else list(REVIEWS_MODELS.keys()) + list(ESSAYS_MODELS.keys())
+
+    reviews_models = set(models).intersection(set(list(REVIEWS_MODELS.keys())))
+    essays_models = set(models).intersection(set(list(ESSAYS_MODELS.keys())))
     
     if reviews_models:
         models_dir = os.path.join(MODEL_DIR, REVIEWS_SUBDIR)

@@ -9,6 +9,7 @@ python -m train --dataset --model_type ... <options>
   --datset:  which dataset to train on ('reviews' or 'essays')
   --model_type:  the type of model to use for training (refer to models.py for module names)
   --model_file:  (optional) which model file to load and continue training on (Ex: 'transformer_model' (don't include the '.pt' extension))
+  --model_name:  What name to give to the model  (will save into <dataset>/<model_name>.pt checkpoint during training).
   --tokenizer:  if specified, will load this pretrained tokenizer instead of the default for this dataset (unless it's not found or a model file is specified (whose tokenizer will take precedence))
   --epochs:  how many epochs to run training for
   --batch_size:  batch size to use for training
@@ -154,7 +155,7 @@ def train(model, tokenizer_name, train_dataset, val_dataset, device, model_name,
         pbar.close()
 
         log_vis = tb_vis_interval > 0
-        metrics = evaluate(model, model_name, val_dataset.type, device, val_loader, loss_func, batch_size=batch_size, vis_bar_chart=log_vis, vis_conf_matrix=log_vis,
+        metrics = evaluate(model, model_name, val_dataset.dataset.type, device, val_loader, loss_func, batch_size=batch_size, vis_bar_chart=log_vis, vis_conf_matrix=log_vis,
                             bar_chart_log_path=val_bar_chart_path, conf_mat_log_path=val_conf_mat_path, verbose=False)
 
         if metrics[metric] > best_score:
@@ -175,7 +176,7 @@ if __name__ == "__main__":
     parser.add_argument('-d', '--dataset', choices=['reviews', 'essays'], default='reviews', help="Which dataset to use for training.")
     parser.add_argument('-t', '--model_type', default='TransformerModel', help="The type of model to use for training (refer to models.py for module names).")
     parser.add_argument('-f', '--model_file', help="The name of the model file to load for training  (loads %s<model_file>.pt)." % MODEL_DIR)
-    parser.add_argument('-n', '--model_name', help="What name to give to the model  (will save intp <dataset>/<model_name>.pt checkpoint during training).")
+    parser.add_argument('-n', '--model_name', help="What name to give to the model  (will save into <dataset>/<model_name>.pt checkpoint during training).")
     parser.add_argument('-tk', '--tokenizer', type=str, help="If specified, will load this pretrained tokenizer instead of the default for this dataset (unless it's not found or a model file is specified (whose tokenizer will take precedence))")
     parser.add_argument('-e', '--epochs', type=int, default=10, help="How many epochs to run the model for.")
     parser.add_argument('-b', '--batch_size', type=int, default=16, help="The batch size to use for training. Will pad / cut sequences if set to something other than '1'.")
