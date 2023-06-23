@@ -21,7 +21,7 @@ Use the module **data/download_dataset.py** to download the Amazon reviews. The 
 
 **Example:  (download all reviews; up to 5,000 examples from each)**
 ```
-python -m data.download_dataset --catspec all --limit 5000
+python -m data.download_dataset --cat_spec all --limit 5000
 ```
 
 ### Download Essays
@@ -41,7 +41,7 @@ Use the module **download_models.py** to download pre-trained models for inferen
 
 **Example:  (downloads all pre-trained models to *saved_models/reviews* and *saved_models/essays*)**
 ```
-python -m download_models.py
+python -m download_models
 ```
 
 ## Launching the App
@@ -58,7 +58,7 @@ python app.py
 ## Training
 To train your own model, refer to **train.py** (*detailed instructions are included at the top of the file*). Default model definitions are included in **models.py**. . The basic usage for **train.py** is like this:  (*Refer to **train.py** for all of the options*)
 ```
-python -m train --dataset <reviews/essays> --metric f1 --tb_vis_interval 150 ... <options>
+python -m train --model_name test_model --dataset <reviews/essays> --metric f1 --tb_vis_interval 150
 ```
 The above command will train a fresh transformer model for 10 epochs and validate using the average reciprocal of the f1 score (*more useful to take into account class imbalance*). It will also save both a bar graph and confusion matrix inside of *logs/<reviws/essays>/<model_name>/<train/val>/*, showing the model's performance on each class. This will also be viewable in Tensorboard. Model checkpoints will be saved in *saved_models/<reviws/essays>/*
 
@@ -84,4 +84,4 @@ For the essays models it would look like this: (*since these were trained using 
 ```
 python -m evaluate basic_transformer_essays essays --loss_func ordinal ... <options>
 ```
-The results will be saved in *logs/<reviws/essays>/<model_name>/<eval>/* by default.
+The results will be saved in *logs/<reviws/essays>/<model_name>/<eval>* by default.
